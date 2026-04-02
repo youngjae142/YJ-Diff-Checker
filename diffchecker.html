@@ -23,8 +23,16 @@
         /* Editor Container */
         #container { height: calc(100% - 75px); width: 100%; }
 
-        /* Empty/Whitespace Line Highlight */
-        .empty-line-highlight { background-color: rgba(255, 193, 7, 0.25) !important; }
+        /* Empty/Whitespace Line Highlight (Hatched Pattern) */
+        .empty-line-highlight { 
+            background: repeating-linear-gradient(
+                -45deg,
+                rgba(255, 193, 7, 0.4),
+                rgba(255, 193, 7, 0.4) 8px,
+                transparent 8px,
+                transparent 16px
+            ) !important; 
+        }
 
         /* Modal Styles */
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1000; }
@@ -126,7 +134,7 @@
             <ul>
                 <li><strong>Undo/Redo:</strong> Reverts or reapplies your text edits inside the active panel.</li>
                 <li><strong>Prev/Next Change:</strong> Automatically scrolls to the next or previous highlighted text difference.</li>
-                <li><strong>Empty Line Highlight:</strong> Lines that are entirely empty or contain only spaces/tabs are highlighted in yellow to help you manage formatting.</li>
+                <li><strong>Empty Line Highlight:</strong> Lines that are entirely empty or contain only spaces/tabs are highlighted in a hatched yellow pattern to help you manage formatting.</li>
             </ul>
             
             <h4>🩹 Auto-Recovery & History</h4>
@@ -215,8 +223,8 @@
                 renderMarginRevertIcon: false
             });
 
-            originalModel = monaco.editor.createModel("Enter original text.", "text/plain");
-            modifiedModel = monaco.editor.createModel("Enter modified text.", "text/plain");
+            originalModel = monaco.editor.createModel("", "text/plain");
+            modifiedModel = monaco.editor.createModel("", "text/plain");
             diffEditor.setModel({ original: originalModel, modified: modifiedModel });
             
             diffEditor.getOriginalEditor().onDidFocusEditorText(() => lastFocusedEditor = diffEditor.getOriginalEditor());
@@ -412,7 +420,7 @@
         }
 
         function openLoadModal() {
-            closeAllModals(); // Close others first
+            closeAllModals(); 
             document.getElementById('load-modal').style.display = 'block';
             document.getElementById('modal-overlay').style.display = 'block';
             updateRecentListUI();
@@ -420,7 +428,7 @@
         }
 
         function openHelpModal() {
-            closeAllModals(); // Close others first
+            closeAllModals(); 
             document.getElementById('help-modal').style.display = 'block';
             document.getElementById('modal-overlay').style.display = 'block';
         }
