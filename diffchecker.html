@@ -220,7 +220,14 @@
                 fontSize: 14, 
                 minimap: { enabled: false }, 
                 wordWrap: "on",
-                renderMarginRevertIcon: false
+                renderMarginRevertIcon: false,
+                
+                // Advanced diff algorithm configuration
+                diffAlgorithm: "advanced",
+                ignoreTrimWhitespace: true,
+                experimental: {
+                    showMoves: true
+                }
             });
 
             originalModel = monaco.editor.createModel("", "text/plain");
