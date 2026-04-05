@@ -15,6 +15,10 @@
         .btn-separator { width: 1px; height: 20px; background: #adb5bd; margin: 0 5px; }
         .spacer { flex-grow: 1; }
 
+        /* Save Status & Auto-save */
+        #save-status { font-size: 13px; font-weight: bold; color: #20c997; min-width: 80px; text-align: center; }
+        .auto-save-label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: #495057; }
+
         /* Header (Labels) Styles */
         #header { height: 35px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #dee2e6; background: #fff; }
         #header-labels { display: flex; width: 100%; }
@@ -76,7 +80,13 @@
         <div class="btn-separator"></div>
         <button class="btn" onclick="navigateDiff('prev')" title="Previous Diff">⬆️ Prev Change</button>
         <button class="btn" onclick="navigateDiff('next')" title="Next Diff">⬇️ Next Change</button>
+        <div class="btn-separator"></div>
         
+        <span id="save-status">Saved ✔️</span>
+        <label class="auto-save-label">
+            <input type="checkbox" id="auto-save-checkbox"> Auto-save (5s)
+        </label>
+
         <div class="spacer"></div>
         <button class="btn" onclick="openHelpModal()" title="Help">❓ Help</button>
     </div>
@@ -122,6 +132,7 @@
             <ul>
                 <li><strong>Save (Ctrl+S):</strong> Saves changes directly to the currently loaded file. Note: This requires modern browser support (File System Access API) and a secure context (HTTPS).</li>
                 <li><strong>Save As (Ctrl+Shift+S):</strong> Prompts you to choose a new location or filename to download the text.</li>
+                <li><strong>Auto-save:</strong> When checked, automatically saves the file to disk every 5 seconds if there are unsaved changes. (Only works if a file is explicitly loaded/saved).</li>
             </ul>
             
             <h4>📂 Loading & Importing</h4>
@@ -152,6 +163,7 @@
         const RECOVERY_KEY = 'diffRecoveryList_v4'; 
         const LAST_PROMPTED_KEY = 'diffLastPromptedTimestamp';
         const ACTIVE_TABS_KEY = 'diffActiveTabs_v1';
+        const AUTO_SAVE_KEY = 'diffAutoSaveState_v1';
         const TAB_ID = Math.random().toString(36).substring(2, 15);
 
         // --- IndexedDB Setup ---
@@ -183,6 +195,44 @@
 
         let originalDecs = [];
         let modifiedDecs = [];
+        let autoSaveInterval = null;
+
+        function updateSaveStatus(isUnsaved) {
+            const statusEl = document.getElementById('save-status');
+            if (isUnsaved) {
+                statusEl.textContent = 'Unsaved ⚠️';
+                statusEl.style.color = '#dc3545';
+            } else {
+                statusEl.textContent = 'Saved ✔️';
+                statusEl.style.color = '#20c997';
+            }
+        }
+
+        function setupAutoSave() {
+            if (autoSaveInterval) clearInterval(autoSaveInterval);
+            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+            
+            if (autoSaveCheckbox.checked) {
+                autoSaveInterval = setInterval(() => {
+                    // Only auto-save to disk if there's a file context (fileHandle) to avoid constant popup prompts
+                    if (hasUnsavedChanges && fileHandle && window.showSaveFilePicker) {
+                        performSave(false);
+                    }
+                }, 5000);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const autoSaveCheckbox = document.getElementById('auto-save-checkbox');
+            autoSaveCheckbox.checked = localStorage.getItem(AUTO_SAVE_KEY) === 'true';
+            
+            autoSaveCheckbox.addEventListener('change', (e) => {
+                localStorage.setItem(AUTO_SAVE_KEY, e.target.checked);
+                setupAutoSave();
+            });
+            
+            setupAutoSave();
+        });
 
         function updateEmptyLines(model, isOriginal) {
             const lineCount = model.getLineCount();
@@ -238,11 +288,17 @@
             diffEditor.getModifiedEditor().onDidFocusEditorText(() => lastFocusedEditor = diffEditor.getModifiedEditor());
 
             originalModel.onDidChangeContent(() => { 
-                if (!isProgrammaticEdit) hasUnsavedChanges = true; 
+                if (!isProgrammaticEdit) {
+                    hasUnsavedChanges = true;
+                    updateSaveStatus(true);
+                }
                 updateEmptyLines(originalModel, true);
             });
             modifiedModel.onDidChangeContent(() => { 
-                if (!isProgrammaticEdit) hasUnsavedChanges = true; 
+                if (!isProgrammaticEdit) {
+                    hasUnsavedChanges = true;
+                    updateSaveStatus(true);
+                }
                 updateEmptyLines(modifiedModel, false);
             });
 
@@ -400,6 +456,7 @@
 
         function finalizeSave(textContent) {
             hasUnsavedChanges = false;
+            updateSaveStatus(false);
             saveToRecent(currentFilename, textContent, fileHandle);
             
             let recoveryList = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
@@ -519,6 +576,7 @@
             currentFilename = filename;
             isProgrammaticEdit = false;
             hasUnsavedChanges = false;
+            updateSaveStatus(false);
             
             fileHandle = handle;
             saveToRecent(filename, content, fileHandle);
@@ -612,6 +670,7 @@
                 currentFilename = item.filename;
                 isProgrammaticEdit = false;
                 hasUnsavedChanges = true;
+                updateSaveStatus(true);
                 fileHandle = null; 
                 closeAllModals();
             }
