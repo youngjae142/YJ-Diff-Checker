@@ -8,21 +8,26 @@
     <style>
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; }
         
+        /* Toolbar Styles */
         #toolbar { height: 40px; background: #e9ecef; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #dee2e6; gap: 10px; }
         .btn { padding: 5px 10px; font-size: 14px; cursor: pointer; border: 1px solid #ced4da; background: #fff; border-radius: 4px; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
         .btn:hover { background: #f1f3f5; border-color: #adb5bd; }
         .btn-separator { width: 1px; height: 20px; background: #adb5bd; margin: 0 5px; }
         .spacer { flex-grow: 1; }
 
+        /* Save Status & Auto-save */
         #save-status { font-size: 13px; font-weight: bold; color: #20c997; min-width: 80px; text-align: center; }
         .auto-save-label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: #495057; }
 
+        /* Header (Labels) Styles */
         #header { height: 35px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #dee2e6; background: #fff; }
         #header-labels { display: flex; width: 100%; }
         .label { flex: 1; text-align: center; font-size: 13px; font-weight: bold; }
         
+        /* Editor Container */
         #container { height: calc(100% - 75px); width: 100%; }
 
+        /* Empty/Whitespace Line Highlight (Hatched Pattern) */
         .empty-line-highlight { 
             background: repeating-linear-gradient(
                 -45deg,
@@ -33,6 +38,7 @@
             ) !important; 
         }
 
+        /* Modal Styles */
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1000; }
         #load-modal { width: 800px; }
         #help-modal { width: 600px; max-width: 90vw; }
@@ -55,6 +61,7 @@
         .delete-btn:hover { opacity: 1; transform: scale(1.2); }
         .close-btn { float: right; cursor: pointer; font-weight: bold; padding: 5px; font-size: 16px; }
 
+        /* Help Menu Content Styles */
         .help-content { line-height: 1.6; font-size: 14px; color: #333; max-height: 450px; overflow-y: auto; padding-right: 10px; }
         .help-content h4 { color: #20c997; margin-bottom: 5px; margin-top: 15px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
         .help-content ul { margin-top: 5px; padding-left: 20px; }
@@ -63,8 +70,7 @@
 </head>
 <body>
     <div id="toolbar">
-        <button class="btn" onclick="openNewTab()" title="New Tab">➕ New Tab</button>
-        <div class="btn-separator"></div>
+        <button class="btn" onclick="openNewTab()" title="Open New Tab">➕ New Tab</button>
         <button class="btn" onclick="saveFileNative()" title="Save (Ctrl+S)">💾 Save</button>
         <button class="btn" onclick="saveAsFileNative()" title="Save As (Ctrl+Shift+S)">💾 Save As</button>
         <div class="btn-separator"></div>
@@ -123,6 +129,11 @@
         <span class="close-btn" onclick="closeAllModals()">✖</span>
         <h3 style="margin-top: 0;">User Guide & Shortcuts</h3>
         <div class="help-content">
+            <h4>➕ New Tab</h4>
+            <ul>
+                <li>Opens a blank instance of the editor in a new browser tab.</li>
+                <li>Loading a file while you already have text in the current tab will automatically open the new file in a new tab without overwriting your current work.</li>
+            </ul>
             <h4>💾 Saving Files</h4>
             <ul>
                 <li><strong>Save (Ctrl+S):</strong> Saves changes directly to the currently loaded file. Note: This requires modern browser support (File System Access API) and a secure context (HTTPS).</li>
@@ -134,7 +145,6 @@
             <ul>
                 <li>Click <strong>Load</strong> to browse your computer or view your recent edit history.</li>
                 <li>You can also <strong>Drag & Drop</strong> any <code>.txt</code> file directly into the Load menu.</li>
-                <li>If both editor panels are empty, the file loads in the current tab. Otherwise it opens in a <strong>new tab</strong>.</li>
             </ul>
             
             <h4>🔄 Navigation & Editing</h4>
@@ -160,7 +170,6 @@
         const LAST_PROMPTED_KEY = 'diffLastPromptedTimestamp';
         const ACTIVE_TABS_KEY = 'diffActiveTabs_v1';
         const AUTO_SAVE_KEY = 'diffAutoSaveState_v1';
-        const PENDING_LOAD_KEY = 'diffPendingLoad_v1';
         const TAB_ID = Math.random().toString(36).substring(2, 15);
 
         // --- IndexedDB Setup ---
@@ -177,78 +186,9 @@
             request.onsuccess = (e) => {
                 db = e.target.result;
                 updateRecentListUI();
-                // Check if this tab was opened with pending load data
-                checkPendingLoad();
             };
         }
         initDB();
-
-        // --- Helper: check if both editors are empty ---
-        function areBothEditorsEmpty() {
-            if (!originalModel || !modifiedModel) return true;
-            return originalModel.getValue() === '' && modifiedModel.getValue() === '';
-        }
-
-        // --- New Tab ---
-        function openNewTab() {
-            window.open(window.location.href, '_blank');
-        }
-
-        // --- Pending load for new tabs ---
-        function checkPendingLoad() {
-            const pendingRaw = sessionStorage.getItem(PENDING_LOAD_KEY);
-            if (pendingRaw) {
-                sessionStorage.removeItem(PENDING_LOAD_KEY);
-                try {
-                    const pending = JSON.parse(pendingRaw);
-                    if (pending && pending.content && pending.filename) {
-                        // Wait for editor to be ready
-                        const waitForEditor = setInterval(() => {
-                            if (originalModel && modifiedModel) {
-                                clearInterval(waitForEditor);
-                                loadTextContentLocal(pending.content, pending.filename, null);
-                            }
-                        }, 100);
-                    }
-                } catch(e) { console.warn('Failed to parse pending load data', e); }
-            }
-        }
-
-        // --- Load content: decide current tab vs new tab ---
-        function loadTextContent(content, filename, handle) {
-            if (areBothEditorsEmpty()) {
-                // Both editors empty -> load in current tab
-                loadTextContentLocal(content, filename, handle);
-            } else {
-                // Editors have content -> open in new tab
-                // We can't pass fileHandle across tabs, so handle will be null in the new tab
-                sessionStorage.setItem(PENDING_LOAD_KEY, JSON.stringify({ content, filename }));
-                window.open(window.location.href, '_blank');
-                closeAllModals();
-            }
-        }
-
-        // --- Actually load content into current tab's editors ---
-        function loadTextContentLocal(content, filename, handle) {
-            const parts = content.split(/===== MODIFIED =====\r?\n/);
-            let o = "", m = "";
-            if (parts.length === 2) {
-                o = parts[0].replace(/===== ORIGINAL =====\r?\n/, '').replace(/\r?\n$/, '');
-                m = parts[1];
-            } else { o = m = content; }
-
-            isProgrammaticEdit = true;
-            originalModel.setValue(o);
-            modifiedModel.setValue(m);
-            currentFilename = filename;
-            isProgrammaticEdit = false;
-            hasUnsavedChanges = false;
-            updateSaveStatus(false);
-            
-            fileHandle = handle;
-            saveToRecent(filename, content, fileHandle);
-            closeAllModals();
-        }
 
         // --- Monaco Editor Setup ---
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
@@ -262,6 +202,16 @@
         let originalDecs = [];
         let modifiedDecs = [];
         let autoSaveInterval = null;
+
+        function openNewTab() {
+            window.open(window.location.href, '_blank');
+        }
+
+        function isEditorEmpty() {
+            return originalModel && modifiedModel && 
+                   originalModel.getValue() === "" && 
+                   modifiedModel.getValue() === "";
+        }
 
         function updateSaveStatus(isUnsaved) {
             const statusEl = document.getElementById('save-status');
@@ -349,18 +299,42 @@
             diffEditor.getModifiedEditor().onDidFocusEditorText(() => lastFocusedEditor = diffEditor.getModifiedEditor());
 
             originalModel.onDidChangeContent(() => { 
-                if (!isProgrammaticEdit) { hasUnsavedChanges = true; updateSaveStatus(true); }
+                if (!isProgrammaticEdit) {
+                    hasUnsavedChanges = true;
+                    updateSaveStatus(true);
+                }
                 updateEmptyLines(originalModel, true);
             });
             modifiedModel.onDidChangeContent(() => { 
-                if (!isProgrammaticEdit) { hasUnsavedChanges = true; updateSaveStatus(true); }
+                if (!isProgrammaticEdit) {
+                    hasUnsavedChanges = true;
+                    updateSaveStatus(true);
+                }
                 updateEmptyLines(modifiedModel, false);
             });
 
             updateEmptyLines(originalModel, true);
             updateEmptyLines(modifiedModel, false);
 
-            setTimeout(checkRecoveryPrompt, 1000);
+            // Handle cross-tab loading payload
+            const pendingLoad = localStorage.getItem('diffNewTabLoad');
+            if (pendingLoad) {
+                localStorage.removeItem('diffNewTabLoad');
+                const checkDB = setInterval(() => {
+                    if (db) {
+                        clearInterval(checkDB);
+                        loadRecentItem(pendingLoad, true);
+                    }
+                }, 50);
+            } else {
+                const pendingRecovery = localStorage.getItem('diffNewTabRecovery');
+                if (pendingRecovery) {
+                    localStorage.removeItem('diffNewTabRecovery');
+                    loadRecoveryItem(pendingRecovery, true, true); 
+                } else {
+                    setTimeout(checkRecoveryPrompt, 1000);
+                }
+            }
         });
 
         // --- Unsaved Changes Warning & Cleanup ---
@@ -369,7 +343,10 @@
             delete activeTabs[TAB_ID];
             localStorage.setItem(ACTIVE_TABS_KEY, JSON.stringify(activeTabs));
 
-            if (hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; }
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = ''; 
+            }
         });
 
         // --- Keyboard Shortcuts ---
@@ -392,9 +369,11 @@
             
             for (let id in activeTabs) {
                 if (id !== TAB_ID && activeTabs[id].filename === latest.filename && (now - activeTabs[id].lastSeen < 10000)) {
-                    isLockedByOtherTab = true; break;
+                    isLockedByOtherTab = true;
+                    break;
                 }
             }
+
             if (isLockedByOtherTab) return;
 
             const lastPrompted = localStorage.getItem(LAST_PROMPTED_KEY);
@@ -409,16 +388,23 @@
         setInterval(() => {
             let activeTabs = JSON.parse(localStorage.getItem(ACTIVE_TABS_KEY) || '{}');
             const now = Date.now();
-            for (let id in activeTabs) { if (now - activeTabs[id].lastSeen > 10000) delete activeTabs[id]; }
+            
+            for (let id in activeTabs) {
+                if (now - activeTabs[id].lastSeen > 10000) delete activeTabs[id];
+            }
+            
             activeTabs[TAB_ID] = { filename: currentFilename, lastSeen: now };
             localStorage.setItem(ACTIVE_TABS_KEY, JSON.stringify(activeTabs));
 
             if (hasUnsavedChanges && !isProgrammaticEdit) {
                 let recoveryList = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
                 recoveryList = recoveryList.filter(item => item.id !== TAB_ID);
+                
                 recoveryList.unshift({
-                    id: TAB_ID, filename: currentFilename,
-                    orig: originalModel.getValue(), mod: modifiedModel.getValue(),
+                    id: TAB_ID, 
+                    filename: currentFilename,
+                    orig: originalModel.getValue(),
+                    mod: modifiedModel.getValue(),
                     timestamp: getFormattedDate()
                 });
 
@@ -426,20 +412,24 @@
                 for (let i = 0; i < recoveryList.length; i++) {
                     const currentItem = recoveryList[i];
                     let hasOlderDuplicate = false;
+                    
                     for (let j = i + 1; j < recoveryList.length; j++) {
                         const olderItem = recoveryList[j];
+                        
                         if (currentItem.filename === olderItem.filename &&
-                            currentItem.orig.length === olderItem.orig.length &&
-                            currentItem.mod.length === olderItem.mod.length &&
                             currentItem.orig === olderItem.orig &&
                             currentItem.mod === olderItem.mod) {
-                            hasOlderDuplicate = true; break;
+                            hasOlderDuplicate = true;
+                            break;
                         }
                     }
+                    
                     if (!hasOlderDuplicate) dedupedList.push(currentItem);
                 }
                 recoveryList = dedupedList;
+                
                 if (recoveryList.length > MAX_RECOVERY) recoveryList.pop();
+                
                 localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveryList));
                 if (document.getElementById('load-modal').style.display === 'block') updateRecoveryListUI();
             }
@@ -465,9 +455,12 @@
                         const options = { mode: 'readwrite' };
                         if ((await fileHandle.queryPermission(options)) !== 'granted') {
                             const perm = await fileHandle.requestPermission(options);
-                            if (perm !== 'granted') throw new Error('Write permission denied by user.');
+                            if (perm !== 'granted') {
+                                throw new Error('Write permission denied by user.');
+                            }
                         }
                     }
+
                     const writable = await fileHandle.createWritable();
                     await writable.write(textContent);
                     await writable.close();
@@ -489,6 +482,7 @@
             hasUnsavedChanges = false;
             updateSaveStatus(false);
             saveToRecent(currentFilename, textContent, fileHandle);
+            
             let recoveryList = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
             recoveryList = recoveryList.filter(item => item.id !== TAB_ID);
             localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveryList));
@@ -527,6 +521,18 @@
             document.getElementById('modal-overlay').style.display = 'block';
         }
 
+        // --- Core Load Dispatcher ---
+        function dispatchLoadTextContent(content, filename, handle) {
+            if (isEditorEmpty()) {
+                loadTextContent(content, filename, handle);
+            } else {
+                saveToRecent(filename, content, handle);
+                localStorage.setItem('diffNewTabLoad', filename);
+                window.open(window.location.href, '_blank');
+                closeAllModals();
+            }
+        }
+
         // --- Drag and Drop Logic ---
         const modalLoad = document.getElementById('load-modal');
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -546,7 +552,7 @@
                         const file = await handle.getFile();
                         if (file.name.endsWith('.txt')) {
                             const content = await file.text();
-                            loadTextContent(content, file.name, handle);
+                            dispatchLoadTextContent(content, file.name, handle);
                             return;
                         }
                     }
@@ -556,7 +562,7 @@
             const file = e.dataTransfer.files[0];
             if (file && file.name.endsWith('.txt')) {
                 const reader = new FileReader();
-                reader.onload = (ev) => loadTextContent(ev.target.result, file.name, null);
+                reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
                 reader.readAsText(file);
             } else {
                 alert("Only .txt files are supported.");
@@ -571,7 +577,7 @@
                     });
                     const file = await handle.getFile();
                     const textContent = await file.text();
-                    loadTextContent(textContent, file.name, handle);
+                    dispatchLoadTextContent(textContent, file.name, handle);
                 } else {
                     document.getElementById('file-input').click();
                 }
@@ -584,10 +590,31 @@
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = (ev) => loadTextContent(ev.target.result, file.name, null);
+            reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
             reader.readAsText(file);
             e.target.value = "";
         });
+
+        function loadTextContent(content, filename, handle = null) {
+            const parts = content.split(/===== MODIFIED =====\r?\n/);
+            let o = "", m = "";
+            if (parts.length === 2) {
+                o = parts[0].replace(/===== ORIGINAL =====\r?\n/, '').replace(/\r?\n$/, '');
+                m = parts[1];
+            } else { o = m = content; }
+
+            isProgrammaticEdit = true;
+            originalModel.setValue(o);
+            modifiedModel.setValue(m);
+            currentFilename = filename;
+            isProgrammaticEdit = false;
+            hasUnsavedChanges = false;
+            updateSaveStatus(false);
+            
+            fileHandle = handle;
+            saveToRecent(filename, content, fileHandle);
+            closeAllModals();
+        }
 
         // --- History & Recovery UI ---
         function getFormattedDate() {
@@ -643,7 +670,7 @@
             });
         }
 
-        window.loadRecentItem = async (name) => {
+        window.loadRecentItem = async (name, forceCurrentTab = false) => {
             const item = await getRecentItemPromise(name);
             if (!item) return;
 
@@ -655,33 +682,41 @@
                         const perm = await handle.requestPermission(options);
                         if (perm !== 'granted') handle = null;
                     }
-                } catch (e) { console.warn("Permission issue:", e); handle = null; }
+                } catch (e) {
+                    console.warn("Permission issue:", e);
+                    handle = null;
+                }
             }
-            loadTextContent(item.data, item.filename, handle);
+
+            if (forceCurrentTab || isEditorEmpty()) {
+                loadTextContent(item.data, item.filename, handle);
+            } else {
+                saveToRecent(item.filename, item.data, handle);
+                localStorage.setItem('diffNewTabLoad', name);
+                window.open(window.location.href, '_blank');
+                closeAllModals();
+            }
         };
 
-        window.loadRecoveryItem = (id, isAuto = false) => {
+        window.loadRecoveryItem = (id, isAuto = false, forceCurrentTab = false) => {
             const list = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
             const item = list.find(i => i.id === id); 
-            if (item) {
-                if (areBothEditorsEmpty() || isAuto) {
-                    // Load in current tab
-                    isProgrammaticEdit = true;
-                    originalModel.setValue(item.orig);
-                    modifiedModel.setValue(item.mod);
-                    currentFilename = item.filename;
-                    isProgrammaticEdit = false;
-                    hasUnsavedChanges = true;
-                    updateSaveStatus(true);
-                    fileHandle = null;
-                    closeAllModals();
-                } else {
-                    // Open in new tab via pending load
-                    const content = `===== ORIGINAL =====\n${item.orig}\n===== MODIFIED =====\n${item.mod}`;
-                    sessionStorage.setItem(PENDING_LOAD_KEY, JSON.stringify({ content, filename: item.filename }));
-                    window.open(window.location.href, '_blank');
-                    closeAllModals();
-                }
+            if (!item) return;
+
+            if (forceCurrentTab || isEditorEmpty()) {
+                isProgrammaticEdit = true;
+                originalModel.setValue(item.orig);
+                modifiedModel.setValue(item.mod);
+                currentFilename = item.filename;
+                isProgrammaticEdit = false;
+                hasUnsavedChanges = true;
+                updateSaveStatus(true);
+                fileHandle = null; 
+                closeAllModals();
+            } else {
+                localStorage.setItem('diffNewTabRecovery', id);
+                window.open(window.location.href, '_blank');
+                closeAllModals();
             }
         };
 
