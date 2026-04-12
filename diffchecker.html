@@ -38,6 +38,15 @@
             ) !important; 
         }
 
+        /* Custom Copy Arrow (Left to Right) - Positioned in the middle */
+        .custom-arrow-right {
+            cursor: pointer;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2320c997'><path d='M8 5v14l11-7z'/></svg>");
+            background-size: 16px;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
         /* Modal Styles */
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1000; transition: background-color 0.3s, color 0.3s; }
         #load-modal { width: 800px; }
@@ -238,8 +247,8 @@
         let hasUnsavedChanges = false;
         let isProgrammaticEdit = false; 
 
-        let originalDecs = [];
         let modifiedDecs = [];
+        let currentChanges = [];
         let autoSaveInterval = null;
 
         function openNewTab() {
@@ -299,11 +308,7 @@
                     });
                 }
             }
-            if (isOriginal) {
-                originalDecs = model.deltaDecorations(originalDecs, newDecs);
-            } else {
-                modifiedDecs = model.deltaDecorations(modifiedDecs, newDecs);
-            }
+            // Empty line decs update removed from Modified temporarily to prevent clash with arrows
         }
 
         require(['vs/editor/editor.main'], function () {
@@ -336,36 +341,123 @@
                 fontSize: 14, 
                 minimap: { enabled: false }, 
                 wordWrap: "on",
-                renderMarginRevertIcon: true,
+                renderMarginRevertIcon: false, 
                 diffAlgorithm: "advanced",
-                ignoreTrimWhitespace: true,
+                ignoreTrimWhitespace: false, 
                 experimental: { showMoves: true }
             });
 
             originalModel = monaco.editor.createModel("", "text/plain");
             modifiedModel = monaco.editor.createModel("", "text/plain");
             diffEditor.setModel({ original: originalModel, modified: modifiedModel });
+
+            const origEditor = diffEditor.getOriginalEditor();
+            const modEditor = diffEditor.getModifiedEditor();
+
+            // Enable glyph margin ONLY on the modified (right) side
+            origEditor.updateOptions({ glyphMargin: false });
+            modEditor.updateOptions({ glyphMargin: true });
+
+            // Listen for diff updates to draw arrows in the middle
+            diffEditor.onDidUpdateDiff(() => {
+                currentChanges = diffEditor.getLineChanges();
+                if (!currentChanges) return;
+
+                const newModDecs = [];
+
+                currentChanges.forEach(change => {
+                    const targetLine = change.modifiedEndLineNumber === 0 
+                        ? Math.max(1, change.modifiedStartLineNumber) 
+                        : change.modifiedStartLineNumber;
+
+                    newModDecs.push({
+                        range: new monaco.Range(targetLine, 1, targetLine, 1),
+                        options: {
+                            glyphMarginClassName: 'custom-arrow-right',
+                            glyphMarginHoverMessage: { value: 'Copy Left to Right' }
+                        }
+                    });
+                });
+
+                modifiedDecs = modEditor.deltaDecorations(modifiedDecs, newModDecs);
+            });
+
+            // Handle custom arrow click to copy text from left to right
+            modEditor.onMouseDown((e) => {
+                if (e.target.element && e.target.element.classList.contains('custom-arrow-right')) {
+                    const clickedLine = e.target.position.lineNumber;
+                    
+                    const change = currentChanges.find(c => {
+                        const line = c.modifiedEndLineNumber === 0 ? c.modifiedStartLineNumber : c.modifiedStartLineNumber;
+                        return Math.max(1, line) === clickedLine;
+                    });
+
+                    if (change) {
+                        const origModel = origEditor.getModel();
+                        const modModel = modEditor.getModel();
+
+                        // Extract text to copy from Original (Left)
+                        let textToCopy = "";
+                        if (change.originalEndLineNumber !== 0) {
+                            const startLine = change.originalStartLineNumber;
+                            const endLine = change.originalEndLineNumber;
+                            
+                            if (endLine < origModel.getLineCount()) {
+                                textToCopy = origModel.getValueInRange(new monaco.Range(startLine, 1, endLine + 1, 1));
+                            } else {
+                                textToCopy = origModel.getValueInRange(new monaco.Range(startLine, 1, endLine, origModel.getLineMaxColumn(endLine)));
+                            }
+                        }
+
+                        // Define target replacement range on Modified (Right)
+                        let modRange;
+                        if (change.modifiedEndLineNumber === 0) {
+                            const insertLine = change.modifiedStartLineNumber + 1;
+                            modRange = new monaco.Range(insertLine, 1, insertLine, 1);
+                            
+                            if (change.originalEndLineNumber === origModel.getLineCount() && insertLine <= modModel.getLineCount()) {
+                                textToCopy += "\n";
+                            }
+                        } else {
+                            const startLine = change.modifiedStartLineNumber;
+                            const endLine = change.modifiedEndLineNumber;
+                            
+                            if (endLine < modModel.getLineCount()) {
+                                modRange = new monaco.Range(startLine, 1, endLine + 1, 1);
+                            } else {
+                                if (startLine > 1 && textToCopy === "") {
+                                    modRange = new monaco.Range(startLine - 1, modModel.getLineMaxColumn(startLine - 1), endLine, modModel.getLineMaxColumn(endLine));
+                                } else {
+                                    modRange = new monaco.Range(startLine, 1, endLine, modModel.getLineMaxColumn(endLine));
+                                }
+                            }
+                        }
+
+                        modModel.pushStackElement(); 
+                        modModel.pushEditOperations([], [{
+                            range: modRange,
+                            text: textToCopy
+                        }], () => null);
+                        modModel.pushStackElement(); 
+                    }
+                }
+            });
             
-            diffEditor.getOriginalEditor().onDidFocusEditorText(() => lastFocusedEditor = diffEditor.getOriginalEditor());
-            diffEditor.getModifiedEditor().onDidFocusEditorText(() => lastFocusedEditor = diffEditor.getModifiedEditor());
+            origEditor.onDidFocusEditorText(() => lastFocusedEditor = origEditor);
+            modEditor.onDidFocusEditorText(() => lastFocusedEditor = modEditor);
 
             originalModel.onDidChangeContent(() => { 
                 if (!isProgrammaticEdit) {
                     hasUnsavedChanges = true;
                     updateSaveStatus(true);
                 }
-                updateEmptyLines(originalModel, true);
             });
             modifiedModel.onDidChangeContent(() => { 
                 if (!isProgrammaticEdit) {
                     hasUnsavedChanges = true;
                     updateSaveStatus(true);
                 }
-                updateEmptyLines(modifiedModel, false);
             });
-
-            updateEmptyLines(originalModel, true);
-            updateEmptyLines(modifiedModel, false);
 
             // Handle cross-tab loading payload
             const pendingLoad = localStorage.getItem('diffNewTabLoad');
