@@ -818,6 +818,8 @@
             if (!item) return;
 
             let handle = item.handle || null;
+            let latestContent = item.data; // Default to cached data from IndexedDB
+
             if (handle) {
                 try {
                     const options = { mode: 'readwrite' };
@@ -825,16 +827,24 @@
                         const perm = await handle.requestPermission(options);
                         if (perm !== 'granted') handle = null;
                     }
+                    
+                    // NEW: Fetch the fresh content from the local file system using the handle
+                    if (handle) {
+                        const file = await handle.getFile();
+                        latestContent = await file.text();
+                    }
                 } catch (e) {
-                    console.warn("Permission issue:", e);
+                    console.warn("Permission issue or file missing:", e);
                     handle = null;
                 }
             }
 
             if (forceCurrentTab || isEditorEmpty()) {
-                loadTextContent(item.data, item.filename, handle);
+                // Pass latestContent instead of item.data
+                loadTextContent(latestContent, item.filename, handle);
             } else {
-                saveToRecent(item.filename, item.data, handle);
+                // Update IndexedDB with the latest content before opening a new tab
+                saveToRecent(item.filename, latestContent, handle);
                 localStorage.setItem('diffNewTabLoad', name);
                 window.open(window.location.href, '_blank');
                 closeAllModals();
