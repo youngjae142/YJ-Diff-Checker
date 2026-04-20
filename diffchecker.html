@@ -183,6 +183,7 @@
         <button class="btn" id="dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">🌙 Dark Mode</button>
         
         <div class="spacer"></div>
+        <button class="btn" id="empty-lines-toggle" onclick="toggleEmptyLines()" title="Toggle Empty Line Highlights">👁️ Empty Lines: ON</button>
         <button class="btn" onclick="openHelpModal()" title="Help">❓ Help</button>
     </div>
 
@@ -246,7 +247,7 @@
                 <li><strong>Splitter (Resizer):</strong> You can drag the vertical divider between the two editors to adjust their widths.</li>
                 <li><strong>Undo/Redo:</strong> Reverts or reapplies your text edits inside the active panel.</li>
                 <li><strong>Prev/Next Change:</strong> Automatically scrolls to the next or previous highlighted text difference.</li>
-                <li><strong>Empty Line Highlight:</strong> Lines that are entirely empty or contain only spaces/tabs are highlighted in a hatched yellow pattern to help you manage formatting.</li>
+                <li><strong>Empty Line Highlight:</strong> Lines that are entirely empty or contain only spaces/tabs are highlighted in a hatched yellow pattern to help you manage formatting. You can toggle this feature On/Off using the toolbar button.</li>
             </ul>
             
             <h4>🩹 Auto-Recovery & History</h4>
@@ -266,6 +267,7 @@
         const ACTIVE_TABS_KEY = 'diffActiveTabs_v1';
         const AUTO_SAVE_KEY = 'diffAutoSaveState_v1';
         const DARK_MODE_KEY = 'diffDarkMode_v1';
+        const EMPTY_LINES_KEY = 'diffEmptyLinesState_v1'; // LocalStorage key for empty lines toggle
         const TAB_ID = Math.random().toString(36).substring(2, 15);
 
         // --- Dark Mode Initialization ---
@@ -279,6 +281,27 @@
             
             if (monaco && monaco.editor) {
                 monaco.editor.setTheme(isDarkMode ? 'mintDiffThemeDark' : 'mintDiffTheme');
+            }
+        }
+
+        // --- Empty Lines Toggle Initialization ---
+        let emptyLinesEnabled = localStorage.getItem(EMPTY_LINES_KEY) !== 'false'; // Defaults to true
+
+        function toggleEmptyLines() {
+            emptyLinesEnabled = !emptyLinesEnabled;
+            localStorage.setItem(EMPTY_LINES_KEY, emptyLinesEnabled);
+            
+            const btn = document.getElementById('empty-lines-toggle');
+            if (btn) {
+                btn.textContent = emptyLinesEnabled ? '👁️ Empty Lines: ON' : '👁️ Empty Lines: OFF';
+            }
+            
+            // Re-run the highlighter logic immediately
+            if (diffEditor) {
+                const origEditor = diffEditor.getOriginalEditor();
+                const modEditor = diffEditor.getModifiedEditor();
+                updateEmptyLines(origEditor, originalModel, true);
+                updateEmptyLines(modEditor, modifiedModel, false);
             }
         }
 
@@ -313,6 +336,7 @@
         let currentChanges = [];
         let autoSaveInterval = null;
 
+        // State arrays to hold decorations for Empty Line Highlights
         let emptyDecsOrig = [];
         let emptyDecsMod = [];
 
@@ -372,27 +396,37 @@
             });
             
             setupAutoSave();
+
+            // Set initial UI state for empty lines toggle button
+            const emptyLinesBtn = document.getElementById('empty-lines-toggle');
+            if (emptyLinesBtn) {
+                emptyLinesBtn.textContent = emptyLinesEnabled ? '👁️ Empty Lines: ON' : '👁️ Empty Lines: OFF';
+            }
         });
 
+        // Function conditionally applies empty line highlights based on toggle state
         function updateEmptyLines(editor, model, isOriginal) {
             if (!editor || !model) return;
-            const lineCount = model.getLineCount();
             const newDecs = [];
             
-            for (let i = 1; i <= lineCount; i++) {
-                if (/^\s*$/.test(model.getLineContent(i))) {
-                    newDecs.push({
-                        range: new monaco.Range(i, 1, i, 1),
-                        options: { 
-                            isWholeLine: true, 
-                            className: 'empty-line-highlight', 
-                            description: 'empty-line' 
-                        }
-                    });
+            // Only search and highlight empty lines if the feature is enabled
+            if (emptyLinesEnabled) {
+                const lineCount = model.getLineCount();
+                for (let i = 1; i <= lineCount; i++) {
+                    if (/^\s*$/.test(model.getLineContent(i))) {
+                        newDecs.push({
+                            range: new monaco.Range(i, 1, i, 1),
+                            options: { 
+                                isWholeLine: true, 
+                                className: 'empty-line-highlight', 
+                                description: 'empty-line' 
+                            }
+                        });
+                    }
                 }
             }
             
-            // Apply the decorations to the editor and store the reference to overwrite them next time
+            // Apply decorations. If disabled, newDecs is empty, which removes existing highlights automatically
             if (isOriginal) {
                 emptyDecsOrig = editor.deltaDecorations(emptyDecsOrig, newDecs);
             } else {
@@ -559,6 +593,7 @@
                 updateEmptyLines(modEditor, modifiedModel, false);
             });
 
+            // Initial call to paint empty lines immediately on load
             updateEmptyLines(origEditor, originalModel, true);
             updateEmptyLines(modEditor, modifiedModel, false);
 
