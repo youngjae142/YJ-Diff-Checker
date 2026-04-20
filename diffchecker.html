@@ -8,24 +8,76 @@
     <style>
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; transition: background-color 0.3s, color 0.3s; }
         
-        /* Toolbar Styles */
-        #toolbar { height: 40px; background: #e9ecef; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #dee2e6; gap: 10px; transition: background-color 0.3s, border-color 0.3s; }
-        .btn { padding: 5px 10px; font-size: 14px; cursor: pointer; border: 1px solid #ced4da; background: #fff; border-radius: 4px; display: flex; align-items: center; gap: 5px; transition: 0.2s; color: #333; }
+        /* File Path Bar Styles */
+        #file-path-bar { height: 25px; background: #f1f3f5; color: #495057; font-size: 12px; font-family: Consolas, monospace; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #dee2e6; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+        #file-name-display { margin-left: 5px; font-weight: bold; color: #dc3545; }
+
+        /* Toolbar Styles (Responsive) */
+        #toolbar { 
+            min-height: 40px; 
+            background: #e9ecef; 
+            display: flex; 
+            align-items: center; 
+            padding: 5px 15px; 
+            border-bottom: 1px solid #dee2e6; 
+            gap: 10px; 
+            transition: background-color 0.3s, border-color 0.3s; 
+            overflow-x: auto; 
+        }
+        
+        #toolbar::-webkit-scrollbar { height: 6px; }
+        #toolbar::-webkit-scrollbar-track { background: transparent; }
+        #toolbar::-webkit-scrollbar-thumb { background: #adb5bd; border-radius: 3px; }
+        .dark-mode #toolbar::-webkit-scrollbar-thumb { background: #555; }
+
+        .btn { 
+            padding: 5px 10px; 
+            font-size: 14px; 
+            cursor: pointer; 
+            border: 1px solid #ced4da; 
+            background: #fff; 
+            border-radius: 4px; 
+            display: flex; 
+            align-items: center; 
+            gap: 5px; 
+            transition: 0.2s; 
+            color: #333; 
+            flex-shrink: 0; 
+        }
         .btn:hover { background: #f1f3f5; border-color: #adb5bd; }
-        .btn-separator { width: 1px; height: 20px; background: #adb5bd; margin: 0 5px; }
-        .spacer { flex-grow: 1; }
+        .btn-separator { width: 1px; height: 20px; background: #adb5bd; margin: 0 5px; flex-shrink: 0; }
+        .spacer { flex-grow: 1; flex-shrink: 0; }
 
         /* Save Status & Auto-save */
-        #save-status { font-size: 13px; font-weight: bold; color: #20c997; min-width: 80px; text-align: center; }
-        .auto-save-label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: #495057; }
+        #save-status { font-size: 13px; font-weight: bold; color: #20c997; min-width: 80px; text-align: center; flex-shrink: 0; }
+        .auto-save-label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: #495057; flex-shrink: 0; }
 
         /* Header (Labels) Styles */
         #header { height: 35px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #dee2e6; background: #fff; transition: background-color 0.3s, border-color 0.3s; }
         #header-labels { display: flex; width: 100%; }
-        .label { flex: 1; text-align: center; font-size: 13px; font-weight: bold; color: #333; }
+        .label { 
+            flex: 1; 
+            text-align: center; 
+            font-size: 13px; 
+            font-weight: bold; 
+            color: #333; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            transition: color 0.3s;
+        }
         
         /* Editor Container */
-        #container { height: calc(100% - 75px); width: 100%; }
+        #container { height: calc(100% - 115px); width: 100%; }
+
+        /* Monaco Editor Draggable Sash (Resizer) Styling */
+        .monaco-sash {
+            background-color: #ced4da !important;
+            transition: background-color 0.2s !important;
+        }
+        .monaco-sash:hover, .monaco-sash.active {
+            background-color: #20c997 !important;
+        }
 
         /* Empty/Whitespace Line Highlight (Hatched Pattern) */
         .empty-line-highlight { 
@@ -38,7 +90,7 @@
             ) !important; 
         }
 
-        /* Custom Copy Arrow (Left to Right) - Positioned in the middle */
+        /* Custom Copy Arrow (Left to Right) */
         .custom-arrow-right {
             cursor: pointer;
             background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2320c997'><path d='M8 5v14l11-7z'/></svg>");
@@ -78,6 +130,7 @@
 
         /* --- Dark Mode Styles --- */
         body.dark-mode { background: #1e1e1e; color: #d4d4d4; }
+        .dark-mode #file-path-bar { background: #1a1a1a; color: #a6a6a6; border-bottom-color: #333; }
         .dark-mode #toolbar { background: #252526; border-bottom-color: #333; }
         .dark-mode #header { background: #1e1e1e; border-bottom-color: #333; }
         .dark-mode .btn { background: #333; color: #d4d4d4; border-color: #444; }
@@ -86,6 +139,10 @@
         .dark-mode .auto-save-label { color: #d4d4d4; }
         .dark-mode .label { color: #d4d4d4; }
         
+        /* Dark mode resizer */
+        .dark-mode .monaco-sash { background-color: #444 !important; }
+        .dark-mode .monaco-sash:hover, .dark-mode .monaco-sash.active { background-color: #20c997 !important; }
+
         .dark-mode .modal { background: #252526; color: #d4d4d4; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         .dark-mode .list-section h4 { color: #d4d4d4; border-bottom-color: #444; }
         .dark-mode .list-container { background: #1e1e1e; border-color: #444; }
@@ -100,6 +157,10 @@
     </style>
 </head>
 <body>
+    <div id="file-path-bar">
+        📁 Current File: <span id="file-name-display">Unsaved (diff_backup.txt)</span>
+    </div>
+
     <div id="toolbar">
         <button class="btn" onclick="openNewTab()" title="Open New Tab">➕ New Tab</button>
         <div class="btn-separator"></div>
@@ -127,8 +188,8 @@
 
     <div id="header">
         <div id="header-labels">
-            <div class="label" style="color: #d32f2f;">Before (Original)</div>
-            <div class="label" style="color: #20c997;">After (Modified)</div>
+            <div id="label-before" class="label" style="color: #d32f2f;">Before (Original)</div>
+            <div id="label-after" class="label" style="color: #20c997;">After (Modified)</div>
         </div>
     </div>
     
@@ -182,6 +243,7 @@
             
             <h4>🔄 Navigation & Editing</h4>
             <ul>
+                <li><strong>Splitter (Resizer):</strong> You can drag the vertical divider between the two editors to adjust their widths.</li>
                 <li><strong>Undo/Redo:</strong> Reverts or reapplies your text edits inside the active panel.</li>
                 <li><strong>Prev/Next Change:</strong> Automatically scrolls to the next or previous highlighted text difference.</li>
                 <li><strong>Empty Line Highlight:</strong> Lines that are entirely empty or contain only spaces/tabs are highlighted in a hatched yellow pattern to help you manage formatting.</li>
@@ -251,6 +313,21 @@
         let currentChanges = [];
         let autoSaveInterval = null;
 
+        let emptyDecsOrig = [];
+        let emptyDecsMod = [];
+
+        function updateFileNameUI() {
+            const display = document.getElementById('file-name-display');
+            if (currentFilename === "diff_backup.txt") {
+                display.textContent = "Unsaved (" + currentFilename + ")";
+                display.style.color = "#dc3545"; // Red color to emphasize unsaved state
+            } else {
+                display.textContent = currentFilename;
+                display.style.color = "#20c997"; // Green color for saved/loaded files
+                if(isDarkMode) display.style.color = "#20c997";
+            }
+        }
+
         function openNewTab() {
             window.open(window.location.href, '_blank');
         }
@@ -297,18 +374,30 @@
             setupAutoSave();
         });
 
-        function updateEmptyLines(model, isOriginal) {
+        function updateEmptyLines(editor, model, isOriginal) {
+            if (!editor || !model) return;
             const lineCount = model.getLineCount();
             const newDecs = [];
+            
             for (let i = 1; i <= lineCount; i++) {
                 if (/^\s*$/.test(model.getLineContent(i))) {
                     newDecs.push({
                         range: new monaco.Range(i, 1, i, 1),
-                        options: { isWholeLine: true, className: 'empty-line-highlight', description: 'empty-line' }
+                        options: { 
+                            isWholeLine: true, 
+                            className: 'empty-line-highlight', 
+                            description: 'empty-line' 
+                        }
                     });
                 }
             }
-            // Empty line decs update removed from Modified temporarily to prevent clash with arrows
+            
+            // Apply the decorations to the editor and store the reference to overwrite them next time
+            if (isOriginal) {
+                emptyDecsOrig = editor.deltaDecorations(emptyDecsOrig, newDecs);
+            } else {
+                emptyDecsMod = editor.deltaDecorations(emptyDecsMod, newDecs);
+            }
         }
 
         require(['vs/editor/editor.main'], function () {
@@ -345,12 +434,19 @@
                 diffAlgorithm: "advanced",
                 maxComputationTime: 0,
                 ignoreTrimWhitespace: false, 
-                experimental: { showMoves: true }
+                experimental: { showMoves: true },
+                renderSideBySide: true, 
+                renderSideBySideInlineBreakpoint: 0, 
+                useInlineViewWhenSpaceIsLimited: false, 
+                enableSplitViewResizing: true, 
+                splitViewDefaultRatio: 0.5 
             });
 
             originalModel = monaco.editor.createModel("", "text/plain");
             modifiedModel = monaco.editor.createModel("", "text/plain");
             diffEditor.setModel({ original: originalModel, modified: modifiedModel });
+            
+            updateFileNameUI();
 
             const origEditor = diffEditor.getOriginalEditor();
             const modEditor = diffEditor.getModifiedEditor();
@@ -359,7 +455,13 @@
             origEditor.updateOptions({ glyphMargin: false });
             modEditor.updateOptions({ glyphMargin: true });
 
-            // Listen for diff updates to draw arrows in the middle
+            origEditor.onDidLayoutChange((layoutInfo) => {
+                const labelBefore = document.getElementById('label-before');
+                if (labelBefore && layoutInfo.width > 0) {
+                    labelBefore.style.flex = `0 0 ${layoutInfo.width}px`;
+                }
+            });
+
             diffEditor.onDidUpdateDiff(() => {
                 currentChanges = diffEditor.getLineChanges();
                 if (!currentChanges) return;
@@ -383,7 +485,6 @@
                 modifiedDecs = modEditor.deltaDecorations(modifiedDecs, newModDecs);
             });
 
-            // Handle custom arrow click to copy text from left to right
             modEditor.onMouseDown((e) => {
                 if (e.target.element && e.target.element.classList.contains('custom-arrow-right')) {
                     const clickedLine = e.target.position.lineNumber;
@@ -397,7 +498,6 @@
                         const origModel = origEditor.getModel();
                         const modModel = modEditor.getModel();
 
-                        // Extract text to copy from Original (Left)
                         let textToCopy = "";
                         if (change.originalEndLineNumber !== 0) {
                             const startLine = change.originalStartLineNumber;
@@ -410,7 +510,6 @@
                             }
                         }
 
-                        // Define target replacement range on Modified (Right)
                         let modRange;
                         if (change.modifiedEndLineNumber === 0) {
                             const insertLine = change.modifiedStartLineNumber + 1;
@@ -435,10 +534,7 @@
                         }
 
                         modModel.pushStackElement(); 
-                        modModel.pushEditOperations([], [{
-                            range: modRange,
-                            text: textToCopy
-                        }], () => null);
+                        modModel.pushEditOperations([], [{ range: modRange, text: textToCopy }], () => null);
                         modModel.pushStackElement(); 
                     }
                 }
@@ -452,13 +548,19 @@
                     hasUnsavedChanges = true;
                     updateSaveStatus(true);
                 }
+                updateEmptyLines(origEditor, originalModel, true);
             });
+            
             modifiedModel.onDidChangeContent(() => { 
                 if (!isProgrammaticEdit) {
                     hasUnsavedChanges = true;
                     updateSaveStatus(true);
                 }
+                updateEmptyLines(modEditor, modifiedModel, false);
             });
+
+            updateEmptyLines(origEditor, originalModel, true);
+            updateEmptyLines(modEditor, modifiedModel, false);
 
             // Handle cross-tab loading payload
             const pendingLoad = localStorage.getItem('diffNewTabLoad');
@@ -631,6 +733,8 @@
             recoveryList = recoveryList.filter(item => item.id !== TAB_ID);
             localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveryList));
             if (document.getElementById('load-modal').style.display === 'block') updateRecoveryListUI();
+            
+            updateFileNameUI();
         }
 
         function fallbackSave(content) {
@@ -758,6 +862,8 @@
             fileHandle = handle;
             saveToRecent(filename, content, fileHandle);
             closeAllModals();
+            
+            updateFileNameUI();
         }
 
         // --- History & Recovery UI ---
@@ -819,7 +925,7 @@
             if (!item) return;
 
             let handle = item.handle || null;
-            let latestContent = item.data; // Default to cached data from IndexedDB
+            let latestContent = item.data;
 
             if (handle) {
                 try {
@@ -829,7 +935,6 @@
                         if (perm !== 'granted') handle = null;
                     }
                     
-                    // NEW: Fetch the fresh content from the local file system using the handle
                     if (handle) {
                         const file = await handle.getFile();
                         latestContent = await file.text();
@@ -841,10 +946,8 @@
             }
 
             if (forceCurrentTab || isEditorEmpty()) {
-                // Pass latestContent instead of item.data
                 loadTextContent(latestContent, item.filename, handle);
             } else {
-                // Update IndexedDB with the latest content before opening a new tab
                 saveToRecent(item.filename, latestContent, handle);
                 localStorage.setItem('diffNewTabLoad', name);
                 window.open(window.location.href, '_blank');
@@ -867,6 +970,8 @@
                 updateSaveStatus(true);
                 fileHandle = null; 
                 closeAllModals();
+                
+                updateFileNameUI();
             } else {
                 localStorage.setItem('diffNewTabRecovery', id);
                 window.open(window.location.href, '_blank');
