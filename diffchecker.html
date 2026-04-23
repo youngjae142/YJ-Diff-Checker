@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Text Diff Editor</title>
+    <title>diff_backup.txt - Real-time Text Diff Editor</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2320c997'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='60' font-family='sans-serif' font-weight='bold' fill='white'>D</text></svg>">
     <style>
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; transition: background-color 0.3s, color 0.3s; }
         
         /* File Path Bar Styles */
         #file-path-bar { height: 25px; background: #f1f3f5; color: #495057; font-size: 12px; font-family: Consolas, monospace; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #dee2e6; transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
-        #file-name-display { margin-left: 5px; font-weight: bold; color: #dc3545; }
+        #file-name-display { margin-left: 5px; font-weight: bold; transition: color 0.3s; }
+        
+        /* Save Status Indicator relocated to top bar */
+        #save-status { margin-left: 10px; font-size: 12px; font-weight: bold; min-width: 80px; transition: color 0.3s; }
 
         /* Toolbar Styles (Responsive) */
         #toolbar { 
@@ -48,8 +51,7 @@
         .btn-separator { width: 1px; height: 20px; background: #adb5bd; margin: 0 5px; flex-shrink: 0; }
         .spacer { flex-grow: 1; flex-shrink: 0; }
 
-        /* Save Status & Auto-save */
-        #save-status { font-size: 13px; font-weight: bold; color: #20c997; min-width: 80px; text-align: center; flex-shrink: 0; }
+        /* Auto-save */
         .auto-save-label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; color: #495057; flex-shrink: 0; }
 
         /* Header (Labels) Styles */
@@ -158,7 +160,8 @@
 </head>
 <body>
     <div id="file-path-bar">
-        📁 Current File: <span id="file-name-display">Unsaved (diff_backup.txt)</span>
+        📁 Current File: <span id="file-name-display">diff_backup.txt</span>
+        <span id="save-status">Unsaved ⚠️</span>
     </div>
 
     <div id="toolbar">
@@ -167,7 +170,6 @@
         <button class="btn" onclick="saveFileNative()" title="Save (Ctrl+S)">💾 Save</button>
         <button class="btn" onclick="saveAsFileNative()" title="Save As (Ctrl+Shift+S)">💾 Save As</button>
         
-        <span id="save-status">Saved ✔️</span>
         <label class="auto-save-label">
             <input type="checkbox" id="auto-save-checkbox"> Auto-save (5s)
         </label>
@@ -267,7 +269,7 @@
         const ACTIVE_TABS_KEY = 'diffActiveTabs_v1';
         const AUTO_SAVE_KEY = 'diffAutoSaveState_v1';
         const DARK_MODE_KEY = 'diffDarkMode_v1';
-        const EMPTY_LINES_KEY = 'diffEmptyLinesState_v1'; // LocalStorage key for empty lines toggle
+        const EMPTY_LINES_KEY = 'diffEmptyLinesState_v1';
         const TAB_ID = Math.random().toString(36).substring(2, 15);
 
         // --- Dark Mode Initialization ---
@@ -285,7 +287,7 @@
         }
 
         // --- Empty Lines Toggle Initialization ---
-        let emptyLinesEnabled = localStorage.getItem(EMPTY_LINES_KEY) !== 'false'; // Defaults to true
+        let emptyLinesEnabled = localStorage.getItem(EMPTY_LINES_KEY) !== 'false';
 
         function toggleEmptyLines() {
             emptyLinesEnabled = !emptyLinesEnabled;
@@ -296,7 +298,6 @@
                 btn.textContent = emptyLinesEnabled ? '👁️ Empty Lines: ON' : '👁️ Empty Lines: OFF';
             }
             
-            // Re-run the highlighter logic immediately
             if (diffEditor) {
                 const origEditor = diffEditor.getOriginalEditor();
                 const modEditor = diffEditor.getModifiedEditor();
@@ -336,19 +337,35 @@
         let currentChanges = [];
         let autoSaveInterval = null;
 
-        // State arrays to hold decorations for Empty Line Highlights
         let emptyDecsOrig = [];
         let emptyDecsMod = [];
 
+        // Updates both File Name and Title UI
         function updateFileNameUI() {
             const display = document.getElementById('file-name-display');
-            if (currentFilename === "diff_backup.txt") {
-                display.textContent = "Unsaved (" + currentFilename + ")";
-                display.style.color = "#dc3545"; // Red color to emphasize unsaved state
+            display.textContent = currentFilename;
+            
+            // Format dynamic tab name
+            document.title = `${currentFilename} - Real-time Text Diff Editor`;
+            
+            // Consider unsaved if it's the default backup file or explicitly changed
+            const isCurrentlyUnsaved = hasUnsavedChanges || currentFilename === "diff_backup.txt";
+            updateSaveStatus(isCurrentlyUnsaved);
+        }
+
+        // Synchronizes colors for both the status indicator and the file name
+        function updateSaveStatus(isUnsaved) {
+            const statusEl = document.getElementById('save-status');
+            const display = document.getElementById('file-name-display');
+            
+            if (isUnsaved) {
+                statusEl.textContent = 'Unsaved ⚠️';
+                statusEl.style.color = '#dc3545';     // Red text
+                display.style.color = '#dc3545';      // Red file name
             } else {
-                display.textContent = currentFilename;
-                display.style.color = "#20c997"; // Green color for saved/loaded files
-                if(isDarkMode) display.style.color = "#20c997";
+                statusEl.textContent = 'Saved ✔️';
+                statusEl.style.color = '#20c997';     // Green text
+                display.style.color = '#20c997';      // Green file name
             }
         }
 
@@ -360,17 +377,6 @@
             return originalModel && modifiedModel && 
                    originalModel.getValue() === "" && 
                    modifiedModel.getValue() === "";
-        }
-
-        function updateSaveStatus(isUnsaved) {
-            const statusEl = document.getElementById('save-status');
-            if (isUnsaved) {
-                statusEl.textContent = 'Unsaved ⚠️';
-                statusEl.style.color = '#dc3545';
-            } else {
-                statusEl.textContent = 'Saved ✔️';
-                statusEl.style.color = '#20c997';
-            }
         }
 
         function setupAutoSave() {
@@ -397,19 +403,16 @@
             
             setupAutoSave();
 
-            // Set initial UI state for empty lines toggle button
             const emptyLinesBtn = document.getElementById('empty-lines-toggle');
             if (emptyLinesBtn) {
                 emptyLinesBtn.textContent = emptyLinesEnabled ? '👁️ Empty Lines: ON' : '👁️ Empty Lines: OFF';
             }
         });
 
-        // Function conditionally applies empty line highlights based on toggle state
         function updateEmptyLines(editor, model, isOriginal) {
             if (!editor || !model) return;
             const newDecs = [];
             
-            // Only search and highlight empty lines if the feature is enabled
             if (emptyLinesEnabled) {
                 const lineCount = model.getLineCount();
                 for (let i = 1; i <= lineCount; i++) {
@@ -426,7 +429,6 @@
                 }
             }
             
-            // Apply decorations. If disabled, newDecs is empty, which removes existing highlights automatically
             if (isOriginal) {
                 emptyDecsOrig = editor.deltaDecorations(emptyDecsOrig, newDecs);
             } else {
@@ -435,7 +437,6 @@
         }
 
         require(['vs/editor/editor.main'], function () {
-            // Light Theme
             monaco.editor.defineTheme('mintDiffTheme', {
                 base: 'vs', inherit: true, rules: [],
                 colors: {
@@ -446,7 +447,6 @@
                 }
             });
 
-            // Dark Theme
             monaco.editor.defineTheme('mintDiffThemeDark', {
                 base: 'vs-dark', inherit: true, rules: [],
                 colors: {
@@ -485,7 +485,6 @@
             const origEditor = diffEditor.getOriginalEditor();
             const modEditor = diffEditor.getModifiedEditor();
 
-            // Enable glyph margin ONLY on the modified (right) side
             origEditor.updateOptions({ glyphMargin: false });
             modEditor.updateOptions({ glyphMargin: true });
 
@@ -593,11 +592,9 @@
                 updateEmptyLines(modEditor, modifiedModel, false);
             });
 
-            // Initial call to paint empty lines immediately on load
             updateEmptyLines(origEditor, originalModel, true);
             updateEmptyLines(modEditor, modifiedModel, false);
 
-            // Handle cross-tab loading payload
             const pendingLoad = localStorage.getItem('diffNewTabLoad');
             if (pendingLoad) {
                 localStorage.removeItem('diffNewTabLoad');
@@ -618,7 +615,6 @@
             }
         });
 
-        // --- Unsaved Changes Warning & Cleanup ---
         window.addEventListener('beforeunload', (e) => {
             let activeTabs = JSON.parse(localStorage.getItem(ACTIVE_TABS_KEY) || '{}');
             delete activeTabs[TAB_ID];
@@ -630,7 +626,6 @@
             }
         });
 
-        // --- Keyboard Shortcuts ---
         document.addEventListener('keydown', e => {
             if (e.ctrlKey || e.metaKey) {
                 if (e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveAsFileNative(); }
@@ -638,7 +633,6 @@
             }
         });
 
-        // --- Recovery Prompt Logic ---
         function checkRecoveryPrompt() {
             const recoveryList = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
             if (recoveryList.length === 0) return;
@@ -665,7 +659,6 @@
             }
         }
 
-        // --- Auto-Save Recovery Cache & Heartbeat Logic ---
         setInterval(() => {
             let activeTabs = JSON.parse(localStorage.getItem(ACTIVE_TABS_KEY) || '{}');
             const now = Date.now();
@@ -722,7 +715,6 @@
             activeEditor.trigger('keyboard', action, null);
         }
 
-        // --- Save Logic ---
         async function performSave(forcePrompt) {
             const textContent = `===== ORIGINAL =====\n${originalModel.getValue()}\n===== MODIFIED =====\n${modifiedModel.getValue()}`;
             try {
@@ -761,7 +753,6 @@
 
         function finalizeSave(textContent) {
             hasUnsavedChanges = false;
-            updateSaveStatus(false);
             saveToRecent(currentFilename, textContent, fileHandle);
             
             let recoveryList = JSON.parse(localStorage.getItem(RECOVERY_KEY) || '[]');
@@ -783,7 +774,6 @@
         function saveFileNative() { performSave(false); }
         function saveAsFileNative() { performSave(true); }
 
-        // --- Load, Help & Modal Logic ---
         function closeAllModals() {
             document.getElementById('load-modal').style.display = 'none';
             document.getElementById('help-modal').style.display = 'none';
@@ -804,7 +794,6 @@
             document.getElementById('modal-overlay').style.display = 'block';
         }
 
-        // --- Core Load Dispatcher ---
         function dispatchLoadTextContent(content, filename, handle) {
             if (isEditorEmpty()) {
                 loadTextContent(content, filename, handle);
@@ -816,7 +805,6 @@
             }
         }
 
-        // --- Drag and Drop Logic ---
         const modalLoad = document.getElementById('load-modal');
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             modalLoad.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
@@ -892,7 +880,6 @@
             currentFilename = filename;
             isProgrammaticEdit = false;
             hasUnsavedChanges = false;
-            updateSaveStatus(false);
             
             fileHandle = handle;
             saveToRecent(filename, content, fileHandle);
@@ -901,7 +888,6 @@
             updateFileNameUI();
         }
 
-        // --- History & Recovery UI ---
         function getFormattedDate() {
             return new Date().toLocaleString('en-GB', { hour12: false }).replace(/\//g, '-');
         }
@@ -1002,7 +988,6 @@
                 currentFilename = item.filename;
                 isProgrammaticEdit = false;
                 hasUnsavedChanges = true;
-                updateSaveStatus(true);
                 fileHandle = null; 
                 closeAllModals();
                 
