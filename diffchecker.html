@@ -48,6 +48,21 @@
             flex-shrink: 0; 
         }
         .btn:hover { background: #f1f3f5; border-color: #adb5bd; }
+        
+        /* Dropdown Select Styles */
+        .toolbar-select {
+            padding: 4px 8px;
+            font-size: 13px;
+            border: 1px solid #ced4da;
+            background: #fff;
+            border-radius: 4px;
+            color: #333;
+            cursor: pointer;
+            transition: 0.2s;
+            outline: none;
+        }
+        .toolbar-select:hover { border-color: #adb5bd; }
+
         .btn-separator { width: 1px; height: 20px; background: #adb5bd; margin: 0 5px; flex-shrink: 0; }
         .spacer { flex-grow: 1; flex-shrink: 0; }
 
@@ -137,6 +152,8 @@
         .dark-mode #header { background: #1e1e1e; border-bottom-color: #333; }
         .dark-mode .btn { background: #333; color: #d4d4d4; border-color: #444; }
         .dark-mode .btn:hover { background: #444; border-color: #555; }
+        .dark-mode .toolbar-select { background: #333; color: #d4d4d4; border-color: #444; }
+        .dark-mode .toolbar-select:hover { border-color: #555; }
         .dark-mode .btn-separator { background: #444; }
         .dark-mode .auto-save-label { color: #d4d4d4; }
         .dark-mode .label { color: #d4d4d4; }
@@ -165,28 +182,49 @@
     </div>
 
     <div id="toolbar">
-        <button class="btn" onclick="openNewTab()" title="Open New Tab">➕ New Tab</button>
+        <button class="btn" onclick="openNewTab()" title="Open New Tab">➕</button>
         <div class="btn-separator"></div>
-        <button class="btn" onclick="saveFileNative()" title="Save (Ctrl+S)">💾 Save</button>
-        <button class="btn" onclick="saveAsFileNative()" title="Save As (Ctrl+Shift+S)">💾 Save As</button>
+        <button class="btn" onclick="saveFileNative()" title="Save (Ctrl+S)">💾</button>
+        <button class="btn" onclick="saveAsFileNative()" title="Save As (Ctrl+Shift+S)">💾 As</button>
         
         <label class="auto-save-label">
             <input type="checkbox" id="auto-save-checkbox"> Auto-save (5s)
         </label>
         
         <div class="btn-separator"></div>
-        <button class="btn" onclick="openLoadModal()" title="Load File">📂 Load</button>
+        <button class="btn" onclick="openLoadModal()" title="Load File">📂</button>
         <div class="btn-separator"></div>
         <button class="btn" onclick="triggerAction('undo')" title="Undo">↩️</button>
         <button class="btn" onclick="triggerAction('redo')" title="Redo">↪️</button>
         <div class="btn-separator"></div>
-        <button class="btn" onclick="navigateDiff('prev')" title="Previous Diff">⬆️ Prev Change</button>
-        <button class="btn" onclick="navigateDiff('next')" title="Next Diff">⬇️ Next Change</button>
-        <button class="btn" id="dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">🌙 Dark Mode</button>
+        
+        <select id="font-family-select" class="toolbar-select" onchange="updateEditorFont()" title="Change Font Family">
+            <option value="Consolas, 'Courier New', monospace">Consolas</option>
+            <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
+            <option value="'Courier New', Courier, monospace">Courier New</option>
+            <option value="'Times New Roman', Times, serif">Times New Roman</option>
+            <option value="Arial, Helvetica, sans-serif">Arial</option>
+        </select>
+        
+        <select id="font-size-select" class="toolbar-select" onchange="updateEditorFont()" title="Change Font Size">
+            <option value="10">10px</option>
+            <option value="12">12px</option>
+            <option value="14">14px</option>
+            <option value="16">16px</option>
+            <option value="18">18px</option>
+            <option value="20">20px</option>
+            <option value="24">24px</option>
+        </select>
+
+        <div class="btn-separator"></div>
+
+        <button class="btn" onclick="navigateDiff('prev')" title="Previous Diff">⬆️</button>
+        <button class="btn" onclick="navigateDiff('next')" title="Next Diff">⬇️</button>
+        <button class="btn" id="dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode"></button>
         
         <div class="spacer"></div>
-        <button class="btn" id="empty-lines-toggle" onclick="toggleEmptyLines()" title="Toggle Empty Line Highlights">👁️ Empty Lines: ON</button>
-        <button class="btn" onclick="openHelpModal()" title="Help">❓ Help</button>
+        <button class="btn" id="empty-lines-toggle" onclick="toggleEmptyLines()" title="Toggle Empty Line Highlights"></button>
+        <button class="btn" onclick="openHelpModal()" title="Help">❓</button>
     </div>
 
     <div id="header">
@@ -212,7 +250,7 @@
         
         <div class="modal-body">
             <div class="list-section">
-                <h4>Recent History (Max 10)</h4>
+                <h4>Recent History (Max 50)</h4>
                 <div id="recent-list" class="list-container"></div>
             </div>
             <div class="list-section">
@@ -241,7 +279,7 @@
             <h4>📂 Loading & Importing</h4>
             <ul>
                 <li>Click <strong>Load</strong> to browse your computer or view your recent edit history.</li>
-                <li>You can also <strong>Drag & Drop</strong> any <code>.txt</code> file directly into the Load menu.</li>
+                <li>You can also <strong>Drag & Drop</strong> any <code>.txt</code> file directly into the Load menu or anywhere on the screen to load it in a new tab.</li>
             </ul>
             
             <h4>🔄 Navigation & Editing</h4>
@@ -270,6 +308,8 @@
         const AUTO_SAVE_KEY = 'diffAutoSaveState_v1';
         const DARK_MODE_KEY = 'diffDarkMode_v1';
         const EMPTY_LINES_KEY = 'diffEmptyLinesState_v1';
+        const FONT_FAMILY_KEY = 'diffFontFamily_v1';
+        const FONT_SIZE_KEY = 'diffFontSize_v1';
         const TAB_ID = Math.random().toString(36).substring(2, 15);
 
         // --- Dark Mode Initialization ---
@@ -280,6 +320,9 @@
             isDarkMode = !isDarkMode;
             localStorage.setItem(DARK_MODE_KEY, isDarkMode);
             document.body.classList.toggle('dark-mode', isDarkMode);
+            
+            const btn = document.getElementById('dark-mode-toggle');
+            if (btn) btn.textContent = isDarkMode ? '☀️' : '🌙';
             
             if (monaco && monaco.editor) {
                 monaco.editor.setTheme(isDarkMode ? 'mintDiffThemeDark' : 'mintDiffTheme');
@@ -295,7 +338,7 @@
             
             const btn = document.getElementById('empty-lines-toggle');
             if (btn) {
-                btn.textContent = emptyLinesEnabled ? '👁️ Empty Lines: ON' : '👁️ Empty Lines: OFF';
+                btn.textContent = emptyLinesEnabled ? '👁️' : '🙈';
             }
             
             if (diffEditor) {
@@ -305,6 +348,61 @@
                 updateEmptyLines(modEditor, modifiedModel, false);
             }
         }
+
+        // --- Font Memory Setup ---
+        let savedFontFamily = localStorage.getItem(FONT_FAMILY_KEY) || "Consolas, 'Courier New', monospace";
+        let savedFontSize = localStorage.getItem(FONT_SIZE_KEY) || "14";
+
+        // --- Update Editor Font Feature ---
+        function updateEditorFont() {
+            const family = document.getElementById('font-family-select').value;
+            const size = parseInt(document.getElementById('font-size-select').value, 10);
+            
+            localStorage.setItem(FONT_FAMILY_KEY, family);
+            localStorage.setItem(FONT_SIZE_KEY, size.toString());
+            
+            if (diffEditor) {
+                const origEditor = diffEditor.getOriginalEditor();
+                const modEditor = diffEditor.getModifiedEditor();
+                origEditor.updateOptions({ fontFamily: family, fontSize: size });
+                modEditor.updateOptions({ fontFamily: family, fontSize: size });
+            }
+        }
+
+        // --- Global Drag and Drop to Load in New Tab ---
+        document.body.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        document.body.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const file = e.dataTransfer.files ? e.dataTransfer.files[0] : null;
+            if (!file || !file.name.endsWith('.txt')) {
+                alert("Only .txt files are supported.");
+                return;
+            }
+
+            let handle = null;
+            const item = e.dataTransfer.items ? e.dataTransfer.items[0] : null;
+            if (item && item.kind === 'file' && item.getAsFileSystemHandle) {
+                try {
+                    const h = await item.getAsFileSystemHandle();
+                    if (h && h.kind === 'file') handle = h;
+                } catch(err) { console.warn("Could not get file handle from drop.", err); }
+            }
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const content = ev.target.result;
+                saveToRecent(file.name, content, handle);
+                localStorage.setItem('diffNewTabLoad', file.name);
+                window.open(window.location.href, '_blank');
+            };
+            reader.readAsText(file);
+        });
 
         // --- IndexedDB Setup ---
         let db = null;
@@ -403,10 +501,17 @@
             
             setupAutoSave();
 
+            const darkModeBtn = document.getElementById('dark-mode-toggle');
+            if (darkModeBtn) darkModeBtn.textContent = isDarkMode ? '☀️' : '🌙';
+
             const emptyLinesBtn = document.getElementById('empty-lines-toggle');
             if (emptyLinesBtn) {
-                emptyLinesBtn.textContent = emptyLinesEnabled ? '👁️ Empty Lines: ON' : '👁️ Empty Lines: OFF';
+                emptyLinesBtn.textContent = emptyLinesEnabled ? '👁️' : '🙈';
             }
+
+            // Restore font settings in the UI dropdowns
+            document.getElementById('font-family-select').value = savedFontFamily;
+            document.getElementById('font-size-select').value = savedFontSize;
         });
 
         function updateEmptyLines(editor, model, isOriginal) {
@@ -461,7 +566,8 @@
                 theme: isDarkMode ? 'mintDiffThemeDark' : 'mintDiffTheme', 
                 originalEditable: true, 
                 automaticLayout: true,
-                fontSize: 14, 
+                fontSize: parseInt(savedFontSize, 10), 
+                fontFamily: savedFontFamily,
                 minimap: { enabled: false }, 
                 wordWrap: "on",
                 renderMarginRevertIcon: false, 
@@ -721,6 +827,8 @@
                 if (window.showSaveFilePicker) {
                     if (forcePrompt || !fileHandle) {
                         fileHandle = await window.showSaveFilePicker({
+                            id: 'diff-editor-directory-memory',
+                            startIn: 'documents',
                             suggestedName: currentFilename,
                             types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }],
                         });
@@ -844,6 +952,8 @@
             try {
                 if (window.showOpenFilePicker) {
                     const [handle] = await window.showOpenFilePicker({
+                        id: 'diff-editor-directory-memory',
+                        startIn: 'documents',
                         types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }],
                     });
                     const file = await handle.getFile();
@@ -889,13 +999,26 @@
         }
 
         function getFormattedDate() {
-            return new Date().toLocaleString('en-GB', { hour12: false }).replace(/\//g, '-');
+            const now = new Date();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            return `${mm}-${dd}-${yyyy}, ${hh}:${min}:${ss}`;
         }
 
         function saveToRecent(filename, data, handle) {
             if (!db) return;
             const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put({ filename, timestamp: getFormattedDate(), data, handle });
+            tx.objectStore(STORE_NAME).put({ 
+                filename, 
+                timestamp: getFormattedDate(), 
+                sortTime: Date.now(),
+                data, 
+                handle 
+            });
             tx.oncomplete = updateRecentListUI;
         }
 
@@ -903,7 +1026,7 @@
             if (!db) return;
             const store = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME);
             store.getAll().onsuccess = (e) => {
-                const list = e.target.result.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10);
+                const list = e.target.result.sort((a,b) => (b.sortTime || 0) - (a.sortTime || 0)).slice(0, 50);
                 const container = document.getElementById('recent-list');
                 container.innerHTML = list.length ? "" : "<div style='padding:10px;color:#999;font-size:12px;'>No recent files.</div>";
                 list.forEach(item => {
