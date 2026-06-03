@@ -246,7 +246,7 @@
             📂 <strong>Drag and Drop</strong> a file here or 
             <button class="btn" onclick="openFileNative()" style="display: inline-block; margin-left: 10px;">Browse Device</button>
         </div>
-        <input type="file" id="file-input" accept=".txt" style="display: none;">
+        <input type="file" id="file-input" accept=".txt" style="display: none;" multiple>
         
         <div class="modal-body">
             <div class="list-section">
@@ -379,29 +379,35 @@
             e.preventDefault();
             e.stopPropagation();
 
-            const file = e.dataTransfer.files ? e.dataTransfer.files[0] : null;
-            if (!file || !file.name.endsWith('.txt')) {
-                alert("Only .txt files are supported.");
-                return;
-            }
+            const items = e.dataTransfer.items;
+            const files = e.dataTransfer.files;
 
-            let handle = null;
-            const item = e.dataTransfer.items ? e.dataTransfer.items[0] : null;
-            if (item && item.kind === 'file' && item.getAsFileSystemHandle) {
-                try {
-                    const h = await item.getAsFileSystemHandle();
-                    if (h && h.kind === 'file') handle = h;
-                } catch(err) { console.warn("Could not get file handle from drop.", err); }
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file') {
+                        let handle = null;
+                        if (item.getAsFileSystemHandle) {
+                            try { handle = await item.getAsFileSystemHandle(); } catch(err) {}
+                        }
+                        const file = item.getAsFile();
+                        if (file && file.name.endsWith('.txt')) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, handle);
+                            reader.readAsText(file);
+                        }
+                    }
+                }
+            } else if (files) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file && file.name.endsWith('.txt')) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
+                        reader.readAsText(file);
+                    }
+                }
             }
-
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const content = ev.target.result;
-                saveToRecent(file.name, content, handle);
-                localStorage.setItem('diffNewTabLoad', file.name);
-                window.open(window.location.href, '_blank');
-            };
-            reader.readAsText(file);
         });
 
         // --- IndexedDB Setup ---
@@ -701,9 +707,16 @@
             updateEmptyLines(origEditor, originalModel, true);
             updateEmptyLines(modEditor, modifiedModel, false);
 
-            const pendingLoad = localStorage.getItem('diffNewTabLoad');
-            if (pendingLoad) {
+            let loadQueue = JSON.parse(localStorage.getItem('diffNewTabLoadQueue') || '[]');
+            const legacyLoad = localStorage.getItem('diffNewTabLoad');
+            if (legacyLoad) {
+                loadQueue.push(legacyLoad);
                 localStorage.removeItem('diffNewTabLoad');
+            }
+
+            if (loadQueue.length > 0) {
+                const pendingLoad = loadQueue.shift();
+                localStorage.setItem('diffNewTabLoadQueue', JSON.stringify(loadQueue));
                 const checkDB = setInterval(() => {
                     if (db) {
                         clearInterval(checkDB);
@@ -907,7 +920,9 @@
                 loadTextContent(content, filename, handle);
             } else {
                 saveToRecent(filename, content, handle);
-                localStorage.setItem('diffNewTabLoad', filename);
+                let queue = JSON.parse(localStorage.getItem('diffNewTabLoadQueue') || '[]');
+                queue.push(filename);
+                localStorage.setItem('diffNewTabLoadQueue', JSON.stringify(queue));
                 window.open(window.location.href, '_blank');
                 closeAllModals();
             }
@@ -923,42 +938,51 @@
         modalLoad.addEventListener('drop', async (e) => {
             modalLoad.classList.remove('dragover');
 
-            const item = e.dataTransfer.items ? e.dataTransfer.items[0] : null;
-            if (item && item.kind === 'file' && item.getAsFileSystemHandle) {
-                try {
-                    const handle = await item.getAsFileSystemHandle();
-                    if (handle && handle.kind === 'file') {
-                        const file = await handle.getFile();
-                        if (file.name.endsWith('.txt')) {
-                            const content = await file.text();
-                            dispatchLoadTextContent(content, file.name, handle);
-                            return;
+            const items = e.dataTransfer.items;
+            const files = e.dataTransfer.files;
+
+            if (items) {
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.kind === 'file') {
+                        let handle = null;
+                        if (item.getAsFileSystemHandle) {
+                            try { handle = await item.getAsFileSystemHandle(); } catch(err) {}
+                        }
+                        const file = item.getAsFile();
+                        if (file && file.name.endsWith('.txt')) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, handle);
+                            reader.readAsText(file);
                         }
                     }
-                } catch(err) { console.warn("Could not get file handle from drop.", err); }
-            }
-            
-            const file = e.dataTransfer.files[0];
-            if (file && file.name.endsWith('.txt')) {
-                const reader = new FileReader();
-                reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
-                reader.readAsText(file);
-            } else {
-                alert("Only .txt files are supported.");
+                }
+            } else if (files) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file && file.name.endsWith('.txt')) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
+                        reader.readAsText(file);
+                    }
+                }
             }
         });
 
         async function openFileNative() { 
             try {
                 if (window.showOpenFilePicker) {
-                    const [handle] = await window.showOpenFilePicker({
+                    const handles = await window.showOpenFilePicker({
                         id: 'diff-editor-directory-memory',
                         startIn: 'documents',
+                        multiple: true,
                         types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }],
                     });
-                    const file = await handle.getFile();
-                    const textContent = await file.text();
-                    dispatchLoadTextContent(textContent, file.name, handle);
+                    for (const handle of handles) {
+                        const file = await handle.getFile();
+                        const textContent = await file.text();
+                        dispatchLoadTextContent(textContent, file.name, handle);
+                    }
                 } else {
                     document.getElementById('file-input').click();
                 }
@@ -968,11 +992,14 @@
         }
 
         document.getElementById('file-input').addEventListener('change', e => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
-            reader.readAsText(file);
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                reader.onload = (ev) => dispatchLoadTextContent(ev.target.result, file.name, null);
+                reader.readAsText(file);
+            }
             e.target.value = "";
         });
 
@@ -1093,7 +1120,9 @@
                 loadTextContent(latestContent, item.filename, handle);
             } else {
                 saveToRecent(item.filename, latestContent, handle);
-                localStorage.setItem('diffNewTabLoad', name);
+                let queue = JSON.parse(localStorage.getItem('diffNewTabLoadQueue') || '[]');
+                queue.push(name);
+                localStorage.setItem('diffNewTabLoadQueue', JSON.stringify(queue));
                 window.open(window.location.href, '_blank');
                 closeAllModals();
             }
