@@ -246,6 +246,12 @@
             📂 <strong>Drag and Drop</strong> a file here or 
             <button class="btn" onclick="openFileNative()" style="display: inline-block; margin-left: 10px;">Browse Device</button>
         </div>
+
+        <div style="margin-bottom: 15px; display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+            <span id="custom-folder-display" style="font-size: 12px; color: #6c757d; font-weight: bold;">Default path: Not Set</span>
+            <button class="btn" onclick="setCustomFolder()" style="font-size: 12px; padding: 4px 8px;">📁 Set Folder</button>
+        </div>
+
         <input type="file" id="file-input" accept=".txt" style="display: none;" multiple>
         
         <div class="modal-body">
@@ -414,19 +420,66 @@
         let db = null;
         const DB_NAME = 'DiffEditorDB';
         const STORE_NAME = 'RecentFilesStore';
+        const CONFIG_STORE = 'ConfigStore';
 
         function initDB() {
-            const request = indexedDB.open(DB_NAME, 1);
+            const request = indexedDB.open(DB_NAME, 3);
             request.onupgradeneeded = (e) => {
                 db = e.target.result;
                 if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'filename' });
+                if (!db.objectStoreNames.contains(CONFIG_STORE)) db.createObjectStore(CONFIG_STORE);
             };
             request.onsuccess = (e) => {
                 db = e.target.result;
+                db.onversionchange = () => db.close();
                 updateRecentListUI();
+                initCustomFolderUI();
+            };
+            request.onblocked = () => {
+                alert("Database update blocked! Please close all other editor tabs and refresh this page.");
             };
         }
         initDB();
+
+        function initCustomFolderUI() {
+            if (!db || !db.objectStoreNames.contains(CONFIG_STORE)) return;
+            const req = db.transaction(CONFIG_STORE, 'readonly').objectStore(CONFIG_STORE).get('defaultFolderHandle');
+            req.onsuccess = () => {
+                if (req.result && req.result.name) {
+                    document.getElementById('custom-folder-display').textContent = `Default path: ${req.result.name}`;
+                }
+            };
+        }
+
+        async function setCustomFolder() {
+            try {
+                const handle = await window.showDirectoryPicker();
+                const tx = db.transaction(CONFIG_STORE, 'readwrite');
+                tx.objectStore(CONFIG_STORE).put(handle, 'defaultFolderHandle');
+                tx.oncomplete = () => {
+                    document.getElementById('custom-folder-display').textContent = `Default path: ${handle.name}`;
+                };
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    console.error("Error picking directory:", e);
+                    alert("Failed to set folder. Please close all other tabs and try again. Error: " + e.message);
+                }
+            }
+        }
+
+        async function getCustomFolderHandle() {
+            if (!db || !db.objectStoreNames.contains(CONFIG_STORE)) return null;
+            return new Promise((resolve) => {
+                try {
+                    const req = db.transaction(CONFIG_STORE, 'readonly').objectStore(CONFIG_STORE).get('defaultFolderHandle');
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                } catch (e) {
+                    console.error("DB read error:", e);
+                    resolve(null);
+                }
+            });
+        }
 
         // --- Monaco Editor Setup ---
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
@@ -774,7 +827,7 @@
             if (latest.timestamp !== lastPrompted) {
                 const recover = confirm(`⚠️ Unsaved recovery data found for [${latest.filename}].\nCreated at: ${latest.timestamp}\n\nWould you like to restore this work?`);
                 if (recover) loadRecoveryItem(latest.id, true); 
-                localStorage.setItem(LAST_PROMPTED_KEY, latest.timestamp);
+                localStorage.setItem(LAST_PROPrompted_KEY, latest.timestamp);
             }
         }
 
@@ -839,9 +892,10 @@
             try {
                 if (window.showSaveFilePicker) {
                     if (forcePrompt || !fileHandle) {
+                        let startInLocation = await getCustomFolderHandle() || 'documents';
                         fileHandle = await window.showSaveFilePicker({
                             id: 'diff-editor-directory-memory',
-                            startIn: 'documents',
+                            startIn: startInLocation,
                             suggestedName: currentFilename,
                             types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }],
                         });
@@ -972,9 +1026,10 @@
         async function openFileNative() { 
             try {
                 if (window.showOpenFilePicker) {
+                    let startInLocation = await getCustomFolderHandle() || 'documents';
                     const handles = await window.showOpenFilePicker({
                         id: 'diff-editor-directory-memory',
-                        startIn: 'documents',
+                        startIn: startInLocation,
                         multiple: true,
                         types: [{ description: 'Text File', accept: { 'text/plain': ['.txt'] } }],
                     });
